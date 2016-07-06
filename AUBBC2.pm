@@ -1,15 +1,16 @@
 package AUBBC2;
 use strict;
 use warnings;
+#use re 'debugcolor';
 
-our $VERSION     = 1.0;
+our $VERSION     = 1.01;
 
-our $MEMOIZE     =  1; # use MEMOIZE Default on
-#our $DEBUG       =  0; # Debugger for more info, not used
-our $CONFIG = 0; # Config file path
-our @TAGS = (); # Main Tags[array]{hash}
-our %REGEX; # Regex hash
-our %AUBBC; # AUBBC hash settings
+our $MEMOIZE     = 1; # use MEMOIZE Default on
+#our $DEBUG      =  0; # Debugger for more info, not used
+our $CONFIG      = 0; # Config file path
+our @TAGS        = (); # Main Tags[array]{hash}
+our %REGEX       = (); # Regex hash
+our %AUBBC       = (); # AUBBC hash settings
 # ACCESS_LOG - If the user did not have access for
 # a tag this will send errors to error_message.
 our $ACCESS_LOG  =  0; # Default off
@@ -17,7 +18,7 @@ our $DELIMITER   = ('-' x 40); # delimiter for tag list
 our $FOR_LINKS   = 0; # set link to 1 if the tag is a type of link or 0 if not
 our $BYPASS      = 1; # can use #none #bbcode#utf#smileys to stop those groups
 
-# setting for script_escape and html_to_text
+# settings for script_escape and html_to_text
 our $ESCAPE      = 1; # Use script_escape Default on.
 our $LINE_BREAK  = 1; # changes line break for script_escape and html_to_text
 our $HTML_TYPE   = ' /'; # adds slash to line break script_escape and html_to_text
@@ -29,17 +30,7 @@ my $settings_cache  = undef; # cache for %AUBBC regex
 my $mem_flag        = undef; # Load MEMOIZE once
 my @security_levels = ('Guest', 'User', 'Moderator','Administrator');
 my ($user_level, $user_key) = ('Guest', 0);
-# try to gain some speed
-my @compiled = (qr'^#none', qr'^#bbcode', qr'^#utf', qr'^#smileys', );
-my @mr_comp = ( # match_range
-qr'\A\d+\z', # 0
-qr'\An\\\{(\d+)\-(\d+)\\\}\z', # 1
-qr'\Al\\\{(\d+)\\\}\z', # 2
-qr'\Al\\\{([a-z])\-([a-z])\\\}\z', # 3
-qr'\Aw\\\{(\d+)\\\}\z', # 4
-qr'\A[\w \-\.\,\!\?\_\:\+\@\$\*\/\&\#\;]+\z', # 5
-qr'\Aw\\\{(.+?)\\\}\z' # 6
-);
+
 sub security_levels {
  my ($self,@s_levels) = @_;
  $user_key = undef; # Reset security policy
@@ -80,8 +71,8 @@ my $tag_id = shift;
 }
 
 sub new {
-my $class = shift; # ok, but slow
-my $self = bless {}, $class;  # ok, but slow
+#my $class = shift; # ok, but slow
+#my $self = bless {}, $class;  # ok, but slow
  if ($MEMOIZE && ! defined $mem_flag ) {
   $mem_flag = 1;
   require Memoize if (! defined $Memoize::VERSION);
@@ -93,11 +84,12 @@ my $self = bless {}, $class;  # ok, but slow
    Memoize::memoize('add_settings');
   }
  }
+
 # Load a config file
 require $CONFIG if defined $CONFIG && $CONFIG;
-     
- return $self; # ok, but slow
- #return bless {}; # faster
+
+ #return $self; # ok, but slow
+ return bless {}; # faster
 }
 
 sub DESTROY {
@@ -117,17 +109,17 @@ $AUBBC{$hash_name} = $hashvalue
 sub add_settings {
 my ($self,%s_hash) = @_;
 $settings_cache = undef;
-$AUBBC{$_} = $s_hash{$_} foreach (keys %s_hash);
-# faster then foreach, may not be very portable because of void contex
-#map { $AUBBC{$_} = $s_hash{$_}; } keys %s_hash;
+#$AUBBC{$_} = $s_hash{$_} foreach (keys %s_hash);
+# faster then foreach, this is not void contex
+map { $AUBBC{$_} = $s_hash{$_} } keys %s_hash;
 }
 
 sub get_setting {
  my $self = shift;
  my $name = shift;
- (defined $name && defined $AUBBC{$name})
-  ? return $AUBBC{$name}
-  : return '';
+ $name = (defined $name && defined $AUBBC{$name})
+  ? $AUBBC{$name} : '';
+  return $name;
 }
 
 sub remove_setting {
@@ -147,26 +139,26 @@ sub parse_bbcode {
 
 # join hash names in $settings_cache for regex
 # this way we do not call a foreach to get settings every tag
- $settings_cache = join('|', map{ $_ } keys %AUBBC)
+ $settings_cache = join('|', map { $_ }  keys %AUBBC )
   if (! defined $settings_cache);
-     
+
 # All 3 groups to be bypassed for \A#none mark.
- my ($bbcode, $utf, $smileys) =
-  ($BYPASS && s[$compiled[0]][])
-  ? (1,1,1) : (0,0,0);
-# #bbcode#utf#smileys bypass marks and order  # run order from top to bottom
- $bbcode  = 1 if $BYPASS && s[$compiled[1]][]; #1#0#1#1#0#1#0...
- $utf     = 1 if $BYPASS && s[$compiled[2]][]; #2#1#0#2#0#0#1...
- $smileys = 1 if $BYPASS && s[$compiled[3]][]; #3#2#2#0#1#0#0...
+ my ($bbcode, $utf, $smileys) = ($BYPASS && s{\A\#none}[]x)
+        ? (1,1,1) : (0,0,0);
+       
+# #bbcode#utf#smileys bypass marks and order    # run order from top to bottom
+ $bbcode  = 1 if $BYPASS && s{\A\#bbcode}[]x;      #1#0#1#1#0#1#0...
+ $utf     = 1 if $BYPASS && s{\A\#utf}[]x;         #2#1#0#2#0#0#1...
+ $smileys = 1 if $BYPASS && s{\A\#smileys}[]x;     #3#2#2#0#1#0#0...
 
   # loop through all TAGS.
   for my $i ( 0 .. $#TAGS ) {
-   # no type = no work to do
-   next if ! defined $TAGS[$i]{type};
-   # for links skip
-   next if $FOR_LINKS && $TAGS[$i]{link};
+   # no type = no work to do || for links skip
+   next if ! defined $TAGS[$i]{type}
+    || $FOR_LINKS && $TAGS[$i]{link};
+
    # no work to do for these types skip
-   unless (m'\[') {
+   unless (m'\['x) {
    next if $TAGS[$i]{type} eq 'balanced'
    || $TAGS[$i]{type} eq 'linktag'
    || $TAGS[$i]{type} eq 'single';
@@ -176,6 +168,7 @@ sub parse_bbcode {
    if (defined $BYPASS &&($bbcode || $utf || $smileys)) {
    next if $utf && $TAGS[$i]{group} eq 'utf'
    || $bbcode && $TAGS[$i]{group} eq 'bbcode'
+   || $bbcode && $TAGS[$i]{group} eq 'dbbcode'
    || $smileys && $TAGS[$i]{group} eq 'smileys';
    }
 
@@ -187,49 +180,58 @@ sub parse_bbcode {
   # balanced
   if ($TAGS[$i]{type} eq 'balanced') {
    # Figure out if balanced has attributes
-   $attri_me = ($attri_me =~ m'\A\-\|')
-        ? '[= ].+?'
-        : '='.$attri_me if $attri_me;
-
-  1 while s[(\[(($TAGS[$i]{tag})$attri_me)\]($TAGS[$i]{message})\[\/\3\])][
-         my $ret = set_tag($i, $3, $4, $2);
-         $ret ? $ret : past_participle($1);
-        ]gie, next;
+   $attri_me = ($attri_me =~ m'\A\-\|'x)
+        ? qr'[= ].+?'x
+        : qr'='x.$attri_me if $attri_me;
+   # commen bbcode search
+   if ($TAGS[$i]{group} ne 'dbbcode') {
+   s{(\[(($TAGS[$i]{tag})$attri_me)\]($TAGS[$i]{message})\[\/\3\])}[
+         my $ret = set_tag($i, $3, $4, $2); # set_tag
+         $ret ? $ret : past_participle($1); # past_participle?
+        ]giex;
+        next;
+   } # deeper bbcode search
+    elsif ($TAGS[$i]{group} eq 'dbbcode') {
+      1 while s{(\[(($TAGS[$i]{tag})$attri_me)\]($TAGS[$i]{message})\[\/\3\])}[
+          my $ret = set_tag($i, $3, $4, $2); # set_tag
+          $ret ? $ret : past_participle($1); # past_participle?
+         ]giex;
+         next;
         # next tag balanced is done
-        }
-
- # linktag
- if ($TAGS[$i]{type} eq 'linktag') {
+    }
+ }# linktag
+ elsif ($TAGS[$i]{type} eq 'linktag') {
   # Figure out if linktag has attributes
-  $attri_me = '&#124;'.$attri_me if $attri_me;
-  s[(\[($TAGS[$i]{tag})\:\/\/($TAGS[$i]{message})($attri_me)\])][
-         my $ret = set_tag($i, $2, $3, $4);
-         $ret ? $ret : past_participle($1);
-        ]gie, next;
+  $attri_me = qr'&#124;'x.$attri_me if $attri_me;
+  s{(\[($TAGS[$i]{tag})\:\/\/($TAGS[$i]{message})($attri_me)\])}[
+         my $ret = set_tag($i, $2, $3, $4); # set_tag
+         $ret ? $ret : past_participle($1); # return or past
+        ]giex;
+        next;
         # next tag linktag is done
-        }
-  
-  # single
-  s[(\[($TAGS[$i]{tag})\])][
-        my $ret = set_tag($i, $2, '', '');
-        $ret ? $ret : past_participle($1);
-        ]gie, next if $TAGS[$i]{type} eq 'single';
+ }# single
+  elsif ($TAGS[$i]{type} eq 'single') {
+  s{(\[($TAGS[$i]{tag})\])}[
+        my $ret = set_tag($i, $2, '', ''); # set_tag
+        $ret ? $ret : past_participle($1); # return or past
+        ]giex;
+        next;
         # next tag single is done
- 
-  # strip
-  s[($TAGS[$i]{message})][
-         my $ret = set_tag($i, '', $1, '');
-         $ret ? $ret : '';
-        ]ge if $TAGS[$i]{type} eq 'strip';
-
+ }# strip
+  elsif ($TAGS[$i]{type} eq 'strip') {
+  s{($TAGS[$i]{message})}[
+         my $ret = set_tag($i, '', $1, ''); # set_tag
+         $ret ? $ret : ''; # remove or replace
+        ]gex;
+      }
    } # for
-  }
+  } # if message
  return $_;
 }
 
 sub past_participle {
 local $_ = shift;
-s[\[][&#91;];
+s{\[}[&#91;]x;
 return $_;
 }
 
@@ -252,24 +254,24 @@ sub set_tag {
   if ($TAGS[$tag_id]{function});
 
   # Start balanced attribute syntax matching
-  if ($markup && $TAGS[$tag_id]{type} eq 'balanced' && $extra =~ s[^\-\|][]) {
+  if ($markup && $TAGS[$tag_id]{type} eq 'balanced' && $extra =~ s[^\-\|][]x) {
     my %list; # attributes list from tag
     # they should get the "odd" error to know their syntax is wrong
     # and it parses faster this way.
     # attribute syntax list
-    my %xlist = map { split(m'/') } split m',', $extra;
+    my %xlist = map { split(m'/'x) } split(m','x, $extra);
     # clean up the tag name if its not= an attribute
-    $attrs =~ s[^$tag ][];
+    $attrs =~ s[^\Q$tag ][]x;
     # loop through all attributes for this tag
-    for( split m' (?=\w+\=)', $attrs ) {
+    for( split m'\ (?=\b\w+\b\=)'x, $attrs ) {
     # split for attribute name and value
-        my($name, $value) = split m'=';
+        my($name, $value) = split m'='x;
     # why this is made this way is for speed, but does it all.
     # if the attribute exists and value passes validation
     # and adds to markup or blank markup and last loop.
         ( defined $xlist{ $name }
         && match_range( $xlist{$name}, $value )
-        && $markup =~ s[X\{$name\}][$value]g )
+        && $markup =~ s[X\{\b$name\b\}][$value]gx )
             or $markup = '', last;
 
         undef $list{ $name }; # log matched attributes
@@ -281,19 +283,19 @@ sub set_tag {
 
  # balanced and linktag one attribute
    $extra = $attrs
-   if ( $extra && $attrs =~ s[^(?:$tag\=|\&\#124\;)][]
+   if ( $extra && $attrs =~ s[^(?:\b$tag\b\=|\&\#124\;)][]x
    && ( $TAGS[$tag_id]{type} eq 'balanced' || $TAGS[$tag_id]{type} eq 'linktag' ) );
 
 
   # All types can use but not all will have a value because of type
-  if ($markup && $markup =~ m'\%') {
+  if ($markup && $markup =~ m'\%'x) {
    # use $settings_cache in regex, capture the hash name for the setting
-    $markup =~ s[\%($settings_cache)\%][$AUBBC{$1}]g
+    $markup =~ s[\%(\b$settings_cache\b)\%][$AUBBC{$1}]gx
      if defined $settings_cache;
    
-   $markup =~ s[\%\{tag\}][lc($tag);]ge if $tag;
-   $markup =~ s[\%\{attribute\}][$extra]g if $extra;
-   $markup =~ s[\%\{message\}][$message]g if $message;
+   $markup =~ s[\%\{\btag\b\}][lc($tag);]gex if $tag;
+   $markup =~ s[\%\{\battribute\b\}][$extra]gx if $extra;
+   $markup =~ s[\%\{\bmessage\b\}][$message]gx if $message;
    }
 
    # swap blank $markup with $message value
@@ -322,51 +324,27 @@ sub set_tag {
 sub match_range {
  local $_ = shift;
  my $limited = shift;
-
- if ($limited =~ m[$mr_comp[0]] && m[$mr_comp[1]]) {
+ # number range n\{#-#\}
+ if ($limited =~ m'^\d+$'x && m'^n\\\{(\d+)\-(\d+)\\\}$'x) {
    $limited >= $1 && $limited <= $2 ? return 1 : return 0;
- }
-  if (m[$mr_comp[2]]) {
+ } # length only check l\{#\}
+  if (m'^l\\\{(\d+)\\\}$'x) {
   length($limited) <= $1 ? return 1 : return 0;
- }
-  if (m[$mr_comp[3]]i) {
-  $limited !~ m[\A[$1-$2]+\z]i ? return 0 : return 1;
- }
-  if (m[$mr_comp[4]]) {
+ } # letter range l\{X-X\}
+  if (m'^l\\\{([a-z])\-([a-z])\\\}$'xi) {
+  $limited !~ m/^[\Q$1\E-\Q$2\E]+$/xi ? return 0 : return 1;
+ } # preset character length check w\{#\}
+  if (m'^w\\\{(\d+)\\\}$'x) {
   # we allow &#\w+; so dont be fooled.
    length($limited) <= $1
-    && $limited =~ m[$mr_comp[5]]i
+    && $limited =~ m'^[\w\ \-\.\,\!\?\_\:\+\@\$\*\/\&\#\;]+$'xi
     ? return 1 : return 0;
- }
-  if (m[$mr_comp[6]]) {
-  $limited =~ m[\A(?:$1)\z]i ? return 1 : return 0;
+ } # word match/ regex expand w\{Word\?\}
+  if (m'^w\\\{(.+?)\\\}$'x) {
+  $limited =~ m/^(?:\Q$1)$/xi ? return 1 : return 0;
  }
   else { return 0; }
 }
-#sub match_range {
-# my $task = shift;
-# my $limited = shift;
-
-# if ($limited =~ m'^\d+$' && $task =~ m'^n\\\{(\d+)\-(\d+)\\\}$') {
-#   $limited >= $1 && $limited <= $2 ? return 1 : return 0;
-# }
-#  if ($task =~ m'^l\\\{(\d+)\\\}$') {
-#  length($limited) <= $1 ? return 1 : return 0;
-# }
-#  if ($task =~ m'^l\\\{([a-z])\-([a-z])\\\}$'i) {
-#  $limited !~ m/^[$1-$2]+$/i ? return 0 : return 1;
-# }
-#  if ($task =~ m'^w\\\{(\d+)\\\}$') {
-#  # we allow &#\w+; so dont be fooled.
-#   length($limited) <= $1
-#    && $limited =~ m'^[\w \-\.\,\!\?\_\:\+\@\$\*\/\&\#\;]+$'i
-#    ? return 1 : return 0;
-# }
-#  if ($task =~ m'^w\\\{(.+?)\\\}$') {
-#  $limited =~ m/^(?:$1)$/i ? return 1 : return 0;
-# }
-#  else { return 0; }
-#}
 
 sub check_subroutine {
  my $self = shift;
@@ -378,7 +356,7 @@ sub check_subroutine {
 sub add_tag {
  my ($self,%NewTag) = @_;
  # set cache value for add_tag fast regex
- $add_reg = join('|', map{ $_ } keys %REGEX)
+ $add_reg = join('|', map { $_ } keys %REGEX)
   if ! $add_reg;
 
 # check the functions subroutine
@@ -391,8 +369,8 @@ sub add_tag {
  }
 
  # match hash regex name and add the regex value from that name
-  $NewTag{message} =~ s[^($add_reg)$][$REGEX{$1}] if $add_reg;
-  $NewTag{attribute} =~ s[^($add_reg)$][$REGEX{$1}] if $add_reg;
+  $NewTag{message} =~ s{\A(\b$add_reg\b)\z}[$REGEX{$1}]x if $add_reg;
+  $NewTag{attribute} =~ s{\A(\b$add_reg\b)\z}[$REGEX{$1}]x if $add_reg;
  # Push the new tag at the end of the @TAGS array
   push(@TAGS, {
    'tag'         => $NewTag{tag}        || '',
@@ -409,18 +387,10 @@ sub add_tag {
    });
 }
 
-sub remove_tag {
- my $self = shift;
- my $id = shift;
- delete $TAGS[$id]
-  if defined $id && defined $TAGS[$id];
-}
-
 sub tag_list {
  my $self = shift;
- my $type = shift;
+ my $type = shift || '';
  my $text = '@TAGS:'."\n".$DELIMITER."\n".add_list(@TAGS);
- $type = '' unless defined $type && $type;
  $text = $self->script_escape($text) if $type eq 'html';
  return $text;
 }
@@ -465,32 +435,27 @@ TEXT
  return $txt;
 }
 
-sub clear_tags {
- my $self = shift;
- @TAGS = ();
-}
-
 sub script_escape {
   my $self = shift;
   local $_ = shift || '';
   if ($_) {
-  s[(&|;)][$1 eq '&' ? '&amp;' : '&#59;']ge;
+  s[(&|;)][$1 eq '&' ? '&amp;' : '&#59;']gex;
   if (! $NO_PRETTY) {
-   s[\t][ \&nbsp; \&nbsp; \&nbsp;]g;
-   s[  ][ \&nbsp;]g;
+   s{\t}[\ \&nbsp;\ \&nbsp;\ \&nbsp;]gx;
+   s{\ \ }[\ \&nbsp;]gx;
   }
-  s["][&#34;]g;
-  s[<][&#60;]g;
-  s[>][&#62;]g;
-  s['][&#39;]g;
-  s[\)][&#41;]g;
-  s[\(][&#40;]g;
-  s[\\][&#92;]g;
-  s[\|][&#124;]g;
+  s{"}[&\#34;]gx;
+  s{<}[&\#60;]gx;
+  s{>}[&\#62;]gx;
+  s{'}[&\#39;]gx;
+  s{\)}[&\#41;]gx;
+  s{\(}[&\#40;]gx;
+  s{\\}[&\#92;]gx;
+  s{\|}[&\#124;]gx;
 
   ! $NO_PRETTY && $LINE_BREAK eq '2'
-   ? s[\n][<br$HTML_TYPE>]g
-   : s[\n][<br$HTML_TYPE>\n]g
+   ? s{\n}[<br$HTML_TYPE>]gx
+   : s{\n}[<br$HTML_TYPE>\n]gx
     if ! $NO_PRETTY && $LINE_BREAK eq '1';
   }
  return $_;
@@ -500,21 +465,21 @@ sub html_to_text {
   my $self = shift;
   local $_ = shift || '';
  if ($_) {
-  s[&amp;][&]g;
-  s[&#59;][;]g;
+  s{&amp;}[&]gx;
+  s{&\#59;}[;]gx;
   if (! $NO_PRETTY) {
-   s[ \&nbsp; \&nbsp; \&nbsp;][\t]g;
-   s[ \&nbsp;][  ]g;
+   s{\ \&nbsp;\ \&nbsp;\ \&nbsp;}[\t]gx;
+   s{\ \&nbsp;}[\ \ ]gx;
   }
-  s[&#34;]["]g;
-  s[&#60;][<]g;
-  s[&#62;][>]g;
-  s[&#39;][']g;
-  s[&#41;][\)]g;
-  s[&#40;][\(]g;
-  s[&#92;][\\]g;
-  s[&#124;][\|]g;
-  s[<br(?: ?\/)?>\n?][\n]g if $LINE_BREAK;
+  s{&\#34;}["]gx;
+  s{&\#60;}[<]gx;
+  s{&\#62;}[>]gx;
+  s{&\#39;}[']gx;
+  s{&\#41;}[\)]gx;
+  s{&\#40;}[\(]gx;
+  s{&\#92;}[\\]gx;
+  s{&\#124;}[\|]gx;
+  s{<br\ ?\/?>\n?}[\n]gx if $LINE_BREAK;
   }
  return $_;
 }
@@ -533,24 +498,10 @@ __END__
 
 =pod
 
-=head1 COPYLEFT
-
-AUBBC2.pm, v1.00 06/16/2016 By: N.K.A.
-
-final version
-
-shakaflex [at] gmail.com
-
-http://search.cpan.org/~sflex/
-
-Advanced Universal Bulletin Board Code 2
+=head1 ABSTRACT
 
 BBcode parser engine with individual tag security, attribute validation,
 customization markup template and more.
-
-Tested on Perl 5.8 and 5.22. The higher Perl version you go,
-the faster this module should run. High speeds use Memoize.
-Not tested but Memoize may or may not be good for mod_perl or Plack.
 
 =head1 SYNOPSIS
 
@@ -558,8 +509,8 @@ Not tested but Memoize may or may not be good for mod_perl or Plack.
       %AUBBC2::AUBBC       = ();# Module Settings
       $AUBBC2::MEMOIZE     =  1;# Speed up the module, good for any load.
       @AUBBC2::TAGS        = ();# Tags
-      %AUBBC2::regex       = ();# regex for add_tag()
-      $AUBBC2::Config      = '';# Path to configuration file
+      %AUBBC2::REGEX       = ();# regex for add_tag()
+      $AUBBC2::CONFIG      = '';# Path to configuration file
       $AUBBC2::ESCAPE      =  1;# Use script_escape Default on
       $AUBBC2::ACCESS_LOG  =  0;# Default off, If the user did not have access
       $AUBBC2::DELIMITER   =  ('-' x 40);# Delimiter for tag list
@@ -567,10 +518,10 @@ Not tested but Memoize may or may not be good for mod_perl or Plack.
       my $aubbc = AUBBC2->new();
 
      $aubbc->add_tag(
-     'tag'         => 'b|i|p',          # Tag pattern regex'
+     'tag'         => '[bip]',          # Tag pattern regex'
      'type'        => 'balanced',       # Tag type balanced, single, linktag, strip.
      'link'        => 0,                # if the tag is a link set to 1 or 0 if not, works with $NO_LINKS
-     'group'       => 'bbcode',         # any name but bbcode, utf, smileys cant be bypassed.
+     'group'       => 'dbbcode',        # any name but bbcode, dbbcode, utf, smileys cant be bypassed.
      'security'    => 0,                # security level number
      'error'       => 'Access Denied',  # '' blank for unchanged, ' ' space to remove
      'function'    => '',               # Expand tags function with a Perl subroutine. 'Class::Sub'
@@ -582,11 +533,6 @@ Not tested but Memoize may or may not be good for mod_perl or Plack.
 
       my $message = '[p][b]Foo[/b] [i]Bar[/i][/p]'; # bbcode
       print  $aubbc->parse_bbcode($message);
-
-=head1 ABSTRACT
-
-BBcode parser engine with individual tag security, attribute validation,
-customization markup template and more.
 
 =head1 DESCRIPTION
 
@@ -611,6 +557,9 @@ have matching names for it's ending tag, the Left and right image tags Old AUBBC
 style [left_img]/f.gif[/img] now would have to be this style [left_img]/f.gif[/left_img].
 Never use grouping regex (.) in the module, this module takes care of that. You
 can use none-grouping (?:.) if needed.
+Balanced tags have a special group named dbbcode, this is for deeper searching
+then what /g can provide. Only use the dbbcode group as needed!
+Bypass marks see groups bbcode and dbbcode as the same group.
 
 Configure a [single] type tag
 
@@ -748,11 +697,6 @@ List of methods and what they do or how to use them.
      'markup'      => '%{tag} %{message} %AUBBC_settings% X{attribute_name}', # Tags output
     );
 
-=head2 remove_tag
-
- Remove tag by ID
- ID starts at 0 and is the array number of the @TAGS list
-
 =head2 tag_list
 
  Returns the main @TAGS list in text or html
@@ -763,9 +707,21 @@ List of methods and what they do or how to use them.
 
  Returns a tag list in text
 
+=head2 Remove a tag
+
+ Remove tags by ID
+ ID starts at 0 and is the array number of the @AUBBC2::TAGS list.
+
+        delete @AUBBC2::TAGS[$ID];
+
+ This can shift the ID number of some tags and since there is a hash in the array
+ there can also be an autovivification issue with the array numbers.
+
 =head2 clear_tags
 
  Clears all tags
+ 
+        @AUBBC2::TAGS = ();
 
 =head2 script_escape
 
@@ -973,6 +929,26 @@ Tag:            Info
 %{attribute}        Extra value for non-attribute syntax
 
 X{attribute_name}    Attribute names for values of attribute syntax
+
+=head1 COPYLEFT
+
+AUBBC2.pm, v1.01 07/06/2016 By: N.K.A.
+
+shakaflex [at] gmail.com
+
+https://github.com/sflex/AUBBC
+
+http://search.cpan.org/~sflex/
+
+Advanced Universal Bulletin Board Code 2
+
+BBcode parser engine with individual tag security, attribute validation,
+customization markup template and more.
+
+Tested on Perl 5.8 and 5.22. The higher Perl version you go,
+the faster this module should run. High speeds use Memoize.
+Not tested but Memoize may or may not be good for mod_perl or Plack.
+
 
 =head1 Development Guidance
 
