@@ -4,15 +4,49 @@
 # - Customize internal regex, settings and BBcode tags
 # Customize internal regex and names for message and attribute
 %REGEX = (
- href => qr'[a-z]+\://[\w\.\/\-\~\@\:\;\=]+(?:\?[\w\~\.\;\:\,\$\-\+\!\*\?/\=\&\@\#\%]+?)?',
+ href => qr'[a-z]+\://[\w\.\/\-\~\@\:\;\=]+\??[\w\~\.\;\:\,\$\-\+\!\*\?/\=\&\@\#\%]+?',
  src  => qr'[a-z]+\://[\w\.\/\-\~\@\:\;\=]+|\/[\w\.\/\-\~\@\:\;\=]+',
  any  => qr'.+?', # not for very deep multiple line matching
  any_line  => qr'(?s).+?', # deep multiple line matching
  );
- 
+
+# Tags main %setting% hash
+# You can use $AUBBC{setting} in the markup, but it will not be portable
+# to setting changes.
+# So if you want to change some bbcode links target to _self then others to
+# _blank you would not want to use the perl hash $AUBBC{setting} in the markup
+# insted use %href_target% the perl hash key name and through the object use the
+# add_settings or add_a_setting to change these settings.
+%AUBBC        = (
+    image_hight         => '60',
+    image_width         => '90',
+    image_border        => '0',
+    image_wrap          => ' ',
+    highlight           => 1, # ...
+    html_type           => ' /',
+    href_target         => ' target="_blank"',
+    code_download       => '^Download above code^',
+    href_class          => '',
+    code_class          => ' class="codepost"',
+    code_extra          => '<div style="clear: left"> </div>',
+    quote_class         => ' class="border"',
+    quote_extra         => '<div style="clear: left"> </div>',
+    email_message       => '&#67;&#111;&#110;&#116;&#97;&#99;&#116;&#32;&#69;&#109;&#97;&#105;&#108;',
+    icon_image          => 0,
+    highlight_class1    => ' class="highlightclass1"',
+    highlight_class2    => ' class="highlightclass2"',
+    highlight_class3    => ' class="highlightclass1"',
+    highlight_class4    => ' class="highlightclass1"',
+    highlight_class5    => ' class="highlightclass5"',
+    highlight_class6    => ' class="highlightclass6"',
+    highlight_class7    => ' class="highlightclass7"',
+    highlight_class8    => ' class="highlightclass5"',
+    highlight_class9    => ' class="highlightclass5"',
+    );
+    
 # Hardcoded BBcode tags
 # The function will not be checked as it does in add_tag.
-# message and attribute will not change names src to regex
+# message and attribute will not change names src to regex, so use $REGEX{name}
 # Does all the tags AUBBC can do better.
 @TAGS = (
   { # This is the first tag to parse, so tag ID would be 0
@@ -194,7 +228,7 @@
  'tag' => qr'quote',
   'type' => 'balanced',
   'link' => 1,
-  'group' => 'bbcode',
+  'group' => 'dbbcode',
   'security' => 0,
   'error' => '',
   'description' => 'quote tag [quote=Smith]Some thing Smith said.[/quote].',
@@ -209,7 +243,7 @@
  'tag' => qr'quote',
   'type' => 'balanced',
   'link' => 1,
-  'group' => 'bbcode',
+  'group' => 'dbbcode',
   'security' => 0,
   'error' => '',
   'description' => 'quote tag [quote]Some thing said.[/quote].',
@@ -235,7 +269,7 @@
   'tag' => qr'blockquote|big|h[123456]|[ou]l|li|em|pre|s(?:mall|trong|u[bp])|[bip]',
   'type' => 'balanced',
   'link' => 0,
-  'group' => 'bbcode',
+  'group' => 'dbbcode',
   'security' => 0,
   'error' => '',
   'description' => 'A big mix of text manipulation tags.',
@@ -313,7 +347,7 @@ Your browser does not support the video tag.
   'function' => '',
   'message' => qr'[\w\.\/\-\~\@\:\;\=]+(?:\?[\w\~\.\;\:\&\,\$\-\+\!\*\?/\=\@\#\%]+?)?',
   'attribute' => '',
-  'markup' => '<a href="%{tag}://%{message}"%href_target%%href_class%>%{tag}&#58;//%{message}</a>',
+  'markup' => '<a href=\"%{tag}://%{message}\"%href_target%%href_class%>%{tag}&#58;//%{message}</a>',
  },
   {
   'tag' => qr'utf',
@@ -403,7 +437,7 @@ Your browser does not support the video tag.
   'error' => '',
   'description' => 'a test',
   'function' => \&test_strip,
-  'message' => qr'%%tag%%',
+  'message' => qr'%{1}\btag\b%{1}',
   'attribute' => '',
   'markup' => '',
  },
@@ -416,39 +450,11 @@ Your browser does not support the video tag.
   'error' => '',
   'description' => 'a test',
   'function' => \&test_strip_swap,
-  'message' => qr'%%swap%%',
+  'message' => qr'%{1}\bswap\b%{1}',
   'attribute' => '',
   'markup' => '',
  }
 );# END @TAGS
-
-# Tags main %setting% hash
-%AUBBC        = (
-    image_hight         => '60',
-    image_width         => '90',
-    image_border        => '0',
-    image_wrap          => ' ',
-    highlight           => 1, # ...
-    html_type           => ' /',
-    href_target         => ' target="_blank"',
-    code_download       => '^Download above code^',
-    href_class          => '',
-    code_class          => ' class="codepost"',
-    code_extra          => '<div style="clear: left"> </div>',
-    quote_class         => ' class="border"',
-    quote_extra         => '<div style="clear: left"> </div>',
-    email_message       => '&#67;&#111;&#110;&#116;&#97;&#99;&#116;&#32;&#69;&#109;&#97;&#105;&#108;',
-    icon_image          => 0,
-    highlight_class1    => ' class="highlightclass1"',
-    highlight_class2    => ' class="highlightclass2"',
-    highlight_class3    => ' class="highlightclass1"',
-    highlight_class4    => ' class="highlightclass1"',
-    highlight_class5    => ' class="highlightclass5"',
-    highlight_class6    => ' class="highlightclass6"',
-    highlight_class7    => ' class="highlightclass7"',
-    highlight_class8    => ' class="highlightclass5"',
-    highlight_class9    => ' class="highlightclass5"',
-    );
 
 # Test if function works for strip type
 sub test_strip {
